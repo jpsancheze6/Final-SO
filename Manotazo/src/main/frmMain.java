@@ -1,26 +1,19 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package main;
 
+import java.util.concurrent.Semaphore;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JLabel;
 
-/**
- *
- * @author migu_
- */
 public class frmMain extends javax.swing.JFrame {
-    
+
+    private static int bufer[] = new int[1];
+    private static Semaphore mutex = new Semaphore(1, true);
+    private static int vacias = 3;
+    private static int llenas = 0;
     private final Productor generador = new Productor();
     private int numero = 0;
 
-    /**
-     * Creates new form frmMain
-     */
     public frmMain() {
         initComponents();
         this.setLocationRelativeTo(null); // para centrar el frame
@@ -35,13 +28,15 @@ public class frmMain extends javax.swing.JFrame {
         jugador1.start();
         jugador2.start();
     }
-    
-    private class Productor extends Thread{
+
+    private class Productor extends Thread {
+
         @Override
-        public void run(){
-            while(true){
-                while(numero!=0)
+        public void run() {
+            while (true) {
+                while (numero != 0) {
                     System.out.println("Esperando...");
+                }
                 try {
                     Thread.sleep(2000); // 2 segundos para generar un número
                 } catch (InterruptedException ex) {
@@ -50,19 +45,80 @@ public class frmMain extends javax.swing.JFrame {
                 numero = 1;
                 lblNumero.setText(String.valueOf(numero));
                 System.out.println("Acabo de producir: " + numero);
+                while (vacias <= 0) {
+                    System.out.println("...");
+                }
+                vacias = down(vacias);
+                try {
+                    mutex.acquire();
+                    insertar_elemento(10);
+                    mutex.release();
+                    llenas = up(llenas);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(frmMain.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
     }
-    
-    private class Consumidor extends Thread{
-        private int limite=0, numeroAtrapado=0;
+
+    public int quitar_elemento() {
+        int elemento;
+        int pos = -1;
+        for (int i = 0; i <= 0; i++) {
+            if (bufer[i] != 0) {
+                pos = i;
+            }
+        }
+        elemento = bufer[pos];
+        bufer[pos] = 0;
+        return elemento;
+    }
+
+    public int up(int semaforo) {
+        semaforo++;
+        return semaforo;
+    }
+
+    public int down(int semaforo) {
+        semaforo--;
+        return semaforo;
+    }
+
+    public void insertar_elemento(int elemento) {
+        int pos = -1;
+        for (int i = 0; i <= 0; i++) {
+            if (bufer[i] == 0) {
+                pos = i;
+            }
+        }
+        bufer[pos] = elemento;
+    }
+
+    private class Consumidor extends Thread {
+
+        private int limite = 0, numeroAtrapado = 0;
         private JLabel estado, contador;
-        
+        private boolean bandera = true;
+
         @Override
-        public void run(){
-            while(true){
-                while(numero==0)
+        public void run() {
+            int elemento = 0;
+            while (true && bandera) {
+                while (numero == 0) {
                     System.out.println("Esperando...");
+                }
+                while (llenas <= 0) {
+                    System.out.println("...");
+                }
+                llenas = down(llenas);
+                try {
+                    mutex.acquire();
+                    elemento = quitar_elemento();
+                    mutex.release();
+                    vacias = up(vacias);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(frmMain.class.getName()).log(Level.SEVERE, null, ex);
+                }
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException ex) {
@@ -74,11 +130,15 @@ public class frmMain extends javax.swing.JFrame {
                 aumentar();
             }
         }
-        
-        private void aumentar(){
-            limite+= numeroAtrapado;
+
+        private void aumentar() {
+            limite += numeroAtrapado;
             contador.setText(String.valueOf(limite));
             numeroAtrapado = 0;
+            if(limite == 15){
+                this.bandera = false;
+                this.estado.setText("Ya me llené");
+            }
         }
     }
 
